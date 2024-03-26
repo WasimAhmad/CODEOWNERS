@@ -1,0 +1,45 @@
+name: Dynamically Notify Code Owners
+
+on:
+  pull_request:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: sudo apt-get install jq
+
+      - name: Get changed files
+        id: files
+        run: |
+          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s -c 'split(\"\n\")[:-1]')"
+
+      - name: Notify Code Owners
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILES=${{ steps.files.outputs.files }}
+          CODEOWNERS=$(cat CODEOWNERS | jq -R -s -c 'split(\"\n\")[:-1]')
+          OWNERS=()
+          for file in $(echo $FILES | jq -r '.[]'); do
+            for line in $(echo $CODEOWNERS | jq -r '.[]'); do
+              if [[ $file == ${line%% *}* ]]; then
+                OWNER=${line##* }
+                if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
+                  OWNERS+=($OWNER)
+                fi
+              fi
+            done
+          done
+          if [ ${#OWNERS[@]} -ne 0 ]; then
+            PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+            MESSAGE="Please review the changes: "
+            for OWNER in "${OWNERS[@]}"; do
+              MESSAGE+="@$OWNER "
+            done
+            curl -s -H "Authorization: token $GITHUB_TOKEN" -X POST -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"
+          fi
