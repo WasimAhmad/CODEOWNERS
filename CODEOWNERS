@@ -1,2 +1,2 @@
-/directory1/ @wasimahmad
-/directory2/ @learningcicd
+/directory1/**/* @wasimahmad
+/directory2/**/* @learningcicd
