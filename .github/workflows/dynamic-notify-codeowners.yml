@@ -2,6 +2,7 @@ name: Dynamically Notify Code Owners
 
 on:
   pull_request:
+    types: [opened, synchronize]
 
 jobs:
   notify:
@@ -16,14 +17,13 @@ jobs:
       - name: Get changed files
         id: files
         run: |
-          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s -c 'split(\"\n\")[:-1]')"
-
+          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split("\\n") | .[:-1]')"
       - name: Notify Code Owners
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FILES=${{ steps.files.outputs.files }}
-          CODEOWNERS=$(cat CODEOWNERS | jq -R -s -c 'split(\"\n\")[:-1]')
+          CODEOWNERS=$(cat CODEOWNERS | jq -R -s 'split("\\n") | .[:-1]')
           OWNERS=()
           for file in $(echo $FILES | jq -r '.[]'); do
             for line in $(echo $CODEOWNERS | jq -r '.[]'); do
