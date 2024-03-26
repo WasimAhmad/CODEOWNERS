@@ -1,45 +1,51 @@
-name: Dynamically Notify Code Owners
+name: Notify Code Owners and Request Reviews
 
 on:
   pull_request:
     types: [opened, synchronize]
 
 jobs:
-  notify:
+  notify-and-request-reviews:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-      - name: Install dependencies
-        run: sudo apt-get install jq
-
-      - name: Get changed files
-        id: files
+      - name: Determine Changed Files
+        id: changed-files
         run: |
-          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split("\\n") | .[:-1]')"
-      - name: Notify Code Owners
+          echo "::set-output name=changed_files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split(\\n) | .[:-1]')"
+
+      - name: Notify Code Owners and Request Reviews
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          FILES=${{ steps.files.outputs.files }}
-          CODEOWNERS=$(cat CODEOWNERS | jq -R -s 'split("\\n") | .[:-1]')
-          OWNERS=()
-          for file in $(echo $FILES | jq -r '.[]'); do
-            for line in $(echo $CODEOWNERS | jq -r '.[]'); do
-              if [[ $file == ${line%% *}* ]]; then
-                OWNER=${line##* }
-                if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
-                  OWNERS+=($OWNER)
+          changed_files=(${{ steps.changed-files.outputs.changed_files }})
+          if [ -f CODEOWNERS ]; then
+            codeowners=$(cat CODEOWNERS | jq -R -s 'split(\\n) | .[:-1]')
+            owners=()
+            for file in "${changed_files[@]}"; do
+              for line in $(echo $codeowners | jq -r '.[]'); do
+                pattern=${line%% *}
+                owner=${line##* }
+                if [[ "$file" =~ $pattern ]]; then
+                  if [[ ! " ${owners[@]} " =~ " ${owner} " ]]; then
+                    owners+=($owner)
+                  fi
                 fi
-              fi
+              done
             done
-          done
-          if [ ${#OWNERS[@]} -ne 0 ]; then
-            PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-            MESSAGE="Please review the changes: "
-            for OWNER in "${OWNERS[@]}"; do
-              MESSAGE+="@$OWNER "
-            done
-            curl -s -H "Authorization: token $GITHUB_TOKEN" -X POST -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"
+
+            if [ ${#owners[@]} -ne 0 ]; then
+              pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+              message="Please review the changes: "
+              for owner in "${owners[@]}"; do
+                message+="@$owner "
+              done
+
+              curl -s -H "Authorization: token $GITHUB_TOKEN" -X POST -d "{\"body\": \"$message\"}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${pr_number}/comments"
+
+              reviewers=$(printf ',\"%s\"' "${owners[@]}")
+              reviewers="[${reviewers:1}]"
+              curl -s -H "Authorization: token $GITHUB_TOKEN" -X POST -d "{\"reviewers\": $reviewers}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/requested_reviewers"
+            fi
           fi
