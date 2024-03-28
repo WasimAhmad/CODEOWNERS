@@ -41,8 +41,9 @@ jobs:
           OWNERS=()
           for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
             for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
-              if [[ $file == ${line%% *}* ]]; then
-                OWNER=${line##* }
+              PATTERN=${line%% *}
+              OWNER=${line##* }
+              if [[ $file == $PATTERN* ]]; then
                 if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
                   OWNERS+=($OWNER)
                 fi
