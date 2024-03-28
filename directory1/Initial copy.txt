@@ -1,1 +1,15 @@
-directory1 file
+file_reference = {
+    "directory": "directory1",
+    "file": "file"
+}
+
+
+file_reference = {
+    "directory": "directory1",
+    "file": "file"
+}
+
+print(f"The file is located at {file_reference['directory']}/{file_reference['file']}")
+
+
+The file is located at directory1/file
