@@ -43,6 +43,8 @@ jobs:
             MESSAGE="Please review the changes: "
             for OWNER in "${OWNERS[@]}"; do
               MESSAGE+="@$OWNER "
+              echo @MESSAGE
+              echo @SLACK_WEBHOOK_URL
             done
             curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\"}" $SLACK_WEBHOOK_URL
           fi
