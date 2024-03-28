@@ -45,6 +45,8 @@ jobs:
       
           if [[ ${#unique_owners[@]} -gt 0 ]]; then
             owners_list=$(printf "%s\n" "${!unique_owners[@]}" | jq -R 'split("\n") | .[:-1]')
+            # Debugging
+            echo "owners_list before jq: ${owners_list}" 
             pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
             message="Please review the changes: $(echo $owners_list | jq -r '. | join(", ")')"
             escaped_message=$(printf '%s' "$message" | jq -aRs .)
