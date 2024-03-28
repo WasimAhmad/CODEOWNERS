@@ -28,42 +28,42 @@ jobs:
           echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
           echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
 
-          - name: Notify Code Owners
-          env:
-            SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-            PR_TITLE: ${{ github.event.pull_request.title }}
-            PR_URL: ${{ github.event.pull_request.html_url }}
-            PR_USER: ${{ github.event.pull_request.user.login }}
-          run: |
-            echo "Files: $CHANGED_FILES"
-            CODEOWNERS_CONTENT=$(cat CODEOWNERS | jq -R -s 'split("\n") | .[:-1]')
-            echo "Codeowners content: $CODEOWNERS_CONTENT"
-            OWNERS=()
-            for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
-              for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
-                if [[ $file == ${line%% *}* ]]; then
-                  OWNER=${line##* }
-                  if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
-                    OWNERS+=($OWNER)
-                  fi
+      - name: Notify Code Owners
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+        run: |
+          echo "Files: $CHANGED_FILES"
+          CODEOWNERS_CONTENT=$(cat CODEOWNERS | jq -R -s 'split("\n") | .[:-1]')
+          echo "Codeowners content: $CODEOWNERS_CONTENT"
+          OWNERS=()
+          for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
+            for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
+              if [[ $file == ${line%% *}* ]]; then
+                OWNER=${line##* }
+                if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
+                  OWNERS+=($OWNER)
                 fi
-              done
-            done
-            echo "Owners: ${OWNERS[@]}"
-            if [ ${#OWNERS[@]} -ne 0 ]; then
-              MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nPlease review the changes: "
-              for OWNER in "${OWNERS[@]}"; do
-                MESSAGE+="@$OWNER "
-              done
-              echo "Message: $MESSAGE"
-              response=$(curl -s -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MESSAGE\"}" $SLACK_WEBHOOK_URL)
-              body=$(echo $response | sed -e 's/[0-9]*$//')
-              status=$(echo $response | grep -o '[0-9]*$')
-              echo "Response body: $body"
-              echo "Response status: $status"
-              if [ "$status" -ne 200 ]; then
-                echo "Error sending message to Slack: $body"
-                exit 1
               fi
+            done
+          done
+          echo "Owners: ${OWNERS[@]}"
+          if [ ${#OWNERS[@]} -ne 0 ]; then
+            MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nPlease review the changes: "
+            for OWNER in "${OWNERS[@]}"; do
+              MESSAGE+="@$OWNER "
+            done
+            echo "Message: $MESSAGE"
+            response=$(curl -s -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MESSAGE\"}" $SLACK_WEBHOOK_URL)
+            body=$(echo $response | sed -e 's/[0-9]*$//')
+            status=$(echo $response | grep -o '[0-9]*$')
+            echo "Response body: $body"
+            echo "Response status: $status"
+            if [ "$status" -ne 200 ]; then
+              echo "Error sending message to Slack: $body"
+              exit 1
             fi
+          fi
         
