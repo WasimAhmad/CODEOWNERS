@@ -32,6 +32,6 @@ jobs:
               pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
               message="Please review the changes: $(echo $codeowners | jq -r '. | join(", ")')"
               escaped_message=$(printf '%s' "$message" | jq -aRs .)
-              curl -X POST -H 'Content-type: application/json' --data "{\"text\":$escaped_message\n<${{ github.event.pull_request.html_url }}|Pull Request #$pr_number>}" $SLACK_WEBHOOK_URL
+              curl -X POST -H 'Content-type: application/json' --data "{\"text\":$escaped_message\n<${{ github.event.pull_request.html_url }}|Pull Request #$pr_number>\"}" $SLACK_WEBHOOK_URL
             fi
           fi
