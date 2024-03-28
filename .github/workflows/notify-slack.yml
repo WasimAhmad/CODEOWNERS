@@ -17,17 +17,16 @@ jobs:
         run: sudo apt-get install jq
 
       - name: Get changed files
-        id: files
         run: |
           DIFF_OUTPUT=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "Diff output: $DIFF_OUTPUT"
           CHANGED_FILES=$(echo "$DIFF_OUTPUT" | jq -R -s 'split("\n") | .[:-1]')
-          echo "::set-output name=files::$CHANGED_FILES"
+          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGED_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           echo "Changed files: $CHANGED_FILES"
           echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
           echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
-          echo "Commits between base and head:"
-          git log --oneline 8cf5bfa46e28d3e20d1f8b503cda352e00085051..fd753fa58d92ff3e857a21166e3b89ec049b8dcf
 
       - name: Notify Code Owners
         env:
@@ -36,12 +35,12 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_USER: ${{ github.event.pull_request.user.login }}
         run: |
-          echo "Files: ${{ steps.files.outputs.files }}"
-          CODEOWNERS_CONTENT=$(cat CODEOWNERS | jq -R -s 'split("\\n") | .[:-1]')
+          echo "Files: $CHANGED_FILES"
+          CODEOWNERS_CONTENT=$(cat CODEOWNERS | jq -R -s 'split("\n") | .[:-1]')
           echo "Codeowners content: $CODEOWNERS_CONTENT"
           OWNERS=()
-          for file in $(echo ${{ steps.files.outputs.files }} | jq -r '.[]'); do
-            for line in $(echo $CODEOWNERS_CONTENT | jq -r '.[]'); do
+          for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
+            for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
               if [[ $file == ${line%% *}* ]]; then
                 OWNER=${line##* }
                 if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
