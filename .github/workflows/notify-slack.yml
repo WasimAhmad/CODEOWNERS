@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          fetch-depth: 0  # Fetch all history for all branches and tags
+          fetch-depth: 0
 
       - name: Determine Changed Files
         id: changed-files
@@ -29,10 +29,10 @@ jobs:
           while read -r pattern owners; do
             codeowners_map["$pattern"]="$owners"
           done < CODEOWNERS
-      
+          
           changed_files=$(echo '${{ steps.changed-files.outputs.changed_files }}' | jq -r '.[]')
           declare -A unique_owners
-      
+          
           for file in $changed_files; do
             for pattern in "${!codeowners_map[@]}"; do
               if [[ "$file" == $pattern ]]; then
@@ -42,14 +42,12 @@ jobs:
               fi
             done
           done
-      
+          
           if [[ ${#unique_owners[@]} -gt 0 ]]; then
-            owners_list=$(printf "%s\n" "${!unique_owners[@]}" | jq -R 'split("\n") | .[:-1]')
-            # Debugging
-            echo "owners_list before jq: ${owners_list}" 
+            # Create comma-separated list of owners
+            owners_list=$(IFS=','; echo "${!unique_owners[*]}")
             pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-            message="Please review the changes: $(echo $owners_list | jq -r '. | join(", ")')"
+            message="Please review the changes: $owners_list"
             escaped_message=$(printf '%s' "$message" | jq -aRs .)
             curl -X POST -H 'Content-type: application/json' --data "{\"text\":$escaped_message\n<${{ github.event.pull_request.html_url }}|Pull Request #$pr_number>\"}" $SLACK_WEBHOOK_URL
           fi
-      
