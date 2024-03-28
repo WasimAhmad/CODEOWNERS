@@ -1,53 +1,48 @@
-name: Notify Code Owners and Request Reviews on Slack
+name: Dynamically Notify Code Owners
 
 on:
   pull_request:
-    types: [opened, synchronize] 
+    types: [opened, synchronize]
 
 jobs:
-  notify-and-request-reviews:
+  notify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Determine Changed Files
-        id: changed-files
+      - name: Install dependencies
+        run: sudo apt-get install jq
+
+      - name: Get changed files
+        id: files
         run: |
-          base_sha=$(jq --raw-output .pull_request.base.sha "$GITHUB_EVENT_PATH")
-          head_sha=$(jq --raw-output .pull_request.head.sha "$GITHUB_EVENT_PATH")
-          changed_files=$(git diff --name-only $base_sha $head_sha)
-          echo "::set-output name=changed_files::[$(echo $changed_files | jq -R -s 'split("\n") | .[:-1]')]"
-      
-      - name: Notify Code Owners and Request Reviews
-        if: ${{ always() && steps.changed-files.outputs.changed_files }}
+          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split("\\n") | .[:-1]')"
+      - name: Notify Code Owners
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
         run: |
-          declare -A codeowners_map
-          while read -r pattern owners; do
-            codeowners_map["$pattern"]="$owners"
-          done < CODEOWNERS
-          
-          changed_files=$(echo '${{ steps.changed-files.outputs.changed_files }}' | jq -r '.[]')
-          declare -A unique_owners
-          
-          for file in $changed_files; do
-            for pattern in "${!codeowners_map[@]}"; do
-              if [[ "$file" == $pattern ]]; then
-                for owner in ${codeowners_map[$pattern]}; do
-                  unique_owners["$owner"]=1
-                done
+          FILES=${{ steps.files.outputs.files }}
+          CODEOWNERS=$(cat CODEOWNERS | jq -R -s 'split("\\n") | .[:-1]')
+          OWNERS=()
+          for file in $(echo $FILES | jq -r '.[]'); do
+            for line in $(echo $CODEOWNERS | jq -r '.[]'); do
+              if [[ $file == ${line%% *}* ]]; then
+                OWNER=${line##* }
+                if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
+                  OWNERS+=($OWNER)
+                fi
               fi
             done
           done
-          
-          if [[ ${#unique_owners[@]} -gt 0 ]]; then
-            # Create comma-separated list of owners
-            owners_list=$(IFS=','; echo "${!unique_owners[*]}")
-            pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-            message="Please review the changes: $owners_list"
-            escaped_message=$(printf '%s' "$message" | jq -aRs .)
-            curl -X POST -H 'Content-type: application/json' --data "{\"text\":$escaped_message\n<${{ github.event.pull_request.html_url }}|Pull Request #$pr_number>\"}" $SLACK_WEBHOOK_URL
+          if [ ${#OWNERS[@]} -ne 0 ]; then
+            PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+            MESSAGE="Please review the changes: "
+            for OWNER in "${OWNERS[@]}"; do
+              MESSAGE+="@$OWNER "
+            done
+            curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\"}" $SLACK_WEBHOOK_URL
           fi
