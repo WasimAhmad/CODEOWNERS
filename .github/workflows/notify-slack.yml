@@ -27,7 +27,7 @@ jobs:
         run: |
           changed_files=$(echo '${{ steps.changed-files.outputs.changed_files }}' | jq -r '.[]')
           if [[ -n "$changed_files" ]]; then
-            codeowners=$(grep -f <(echo "$changed_files") CODEOWNERS | cut -d ' ' -f 2- | tr '\n' ',' | jq -R 'split(" ") | unique | map(select(. != ""))')
+            codeowners=$(grep -f <(echo "$changed_files") CODEOWNERS | cut -d ' ' -f 2- | jq -R 'split(" ") | unique | map(select(. != ""))') 
             if [[ $codeowners != "[]" ]]; then
               pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
               message="Please review the changes: $(echo $codeowners | jq -r '. | join(", ")')"
