@@ -34,7 +34,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_USER: ${{ github.event.pull_request.user.login }}
-          REQUESTED_REVIEWERS: "${{ github.event.pull_request.requested_reviewers.*.login }}"
+          REQUESTED_REVIEWERS: "${{ github.event.pull_request.requested_reviewers }}"
         run: |
           echo "Requested reviewers: $REQUESTED_REVIEWERS"
           MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nRequested reviewers: $REQUESTED_REVIEWERS"
