@@ -1,0 +1,34 @@
+name: Notify Code Owners and Request Reviews on Slack
+
+on:
+  pull_request:
+    types: [opened, synchronize] 
+
+jobs:
+  notify-and-request-reviews:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Fetch all history for all branches and tags
+      
+      - name: Determine Changed Files
+        id: changed-files
+        run: |
+            base_sha=$(jq --raw-output .pull_request.base.sha "$GITHUB_EVENT_PATH")
+            head_sha=$(jq --raw-output .pull_request.head.sha "$GITHUB_EVENT_PATH")
+            changed_files=$(git diff --name-only $base_sha $head_sha)
+            echo "::set-output name=changed_files::[$(echo $changed_files | jq -R -s 'split("\n") | .[:-1]')]"
+
+      - name: Notify Code Owners and Request Reviews
+        if: ${{ always() && steps.changed-files.outputs.changed_files }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          changed_files=$(echo '${{ steps.changed-files.outputs.changed_files }}' | jq -r '.[]')
+          codeowners=$(grep -f <(echo "$changed_files") CODEOWNERS | cut -d ' ' -f 2- | tr -d '\n' | jq -R 'split(" ") | unique | map(select(. != ""))')
+          if [[ $codeowners != "[]" ]]; then
+            pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+            message="Please review the changes: $(echo $codeowners | jq -r '. | join(", ")')"
+            curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$message\n<${{ github.event.pull_request.html_url }}|Pull Request #$pr_number>\"}" $SLACK_WEBHOOK_URL
+          fi
