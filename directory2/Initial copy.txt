@@ -1,1 +1,8 @@
-directory2 file
+import os
+
+directory = 'directory2'
+file = 'file'
+
+for item in os.listdir(directory):
+    if item == file:
+        print(os.path.join(directory, item))
