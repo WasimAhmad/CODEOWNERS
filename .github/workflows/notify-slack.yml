@@ -19,10 +19,12 @@ jobs:
       - name: Get changed files
         id: files
         run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split("\n") | .[:-1]')
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | jq -R -s 'split("\\n") | .[:-1]')
           echo "::set-output name=files::$CHANGED_FILES"
           echo "Changed files: $CHANGED_FILES"
-
+          echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
+          echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
+          
       - name: Notify Code Owners
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
