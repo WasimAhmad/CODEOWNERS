@@ -41,9 +41,9 @@ jobs:
           OWNERS=()
           for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
             for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
-              PATTERN=${line%% *}
-              OWNER=${line##* }
-              if [[ $file == $PATTERN* ]]; then
+              if [[ $file == ${line%% *}* ]]; then
+                # Extract the owner's name, assuming it is the last word in the line
+                OWNER=$(echo "$line" | awk '{print $NF}')
                 if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
                   OWNERS+=($OWNER)
                 fi
@@ -67,4 +67,5 @@ jobs:
               exit 1
             fi
           fi
-        
+      
+      
