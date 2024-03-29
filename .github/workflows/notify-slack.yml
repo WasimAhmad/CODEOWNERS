@@ -34,20 +34,42 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_USER: ${{ github.event.pull_request.user.login }}
-          REQUESTED_REVIEWERS: "${{ github.event.pull_request.requested_reviewers }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Requested reviewers: $REQUESTED_REVIEWERS"
-          MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nRequested reviewers: $REQUESTED_REVIEWERS"
-          echo "Message: $MESSAGE"
-          response=$(curl -s -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MESSAGE\"}" $SLACK_WEBHOOK_URL)
-          body=$(echo $response | sed -e 's/[0-9]*$//')
-          status=$(echo $response | grep -o '[0-9]*$')
-          echo "Response body: $body"
-          echo "Response status: $status"
-          if [ "$status" -ne 200 ]; then
-            echo "Error sending message to Slack: $body"
-            exit 1
+          pr_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          requested_reviewers=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/${{ github.repository }}/pulls/${pr_number}/requested_reviewers | jq -r '.users[].login')
+          echo "requested_reviewers: $requested_reviewers"
+          echo "Files: $CHANGED_FILES"
+          CODEOWNERS_CONTENT=$(cat CODEOWNERS | jq -R -s 'split("\n") | .[:-1]')
+          echo "Codeowners content: $CODEOWNERS_CONTENT"
+          OWNERS=()
+          for file in $(echo "$CHANGED_FILES" | jq -r '.[]'); do
+            for line in $(echo "$CODEOWNERS_CONTENT" | jq -r '.[]'); do
+              if [[ $file == ${line%% *}* ]]; then
+                # Extract the owner's name, assuming it is the last word in the line
+                OWNER=$(echo "$line" | awk '{print $NF}')
+                if [[ ! " ${OWNERS[@]} " =~ " ${OWNER} " ]]; then
+                  OWNERS+=($OWNER)
+                fi
+              fi
+            done
+          done
+          echo "Owners: ${OWNERS[@]}"
+          if [ ${#OWNERS[@]} -ne 0 ]; then
+            MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nPlease review the changes: "
+            for OWNER in "${OWNERS[@]}"; do
+              MESSAGE+="@$OWNER "
+            done
+            echo "Message: $MESSAGE"
+            response=$(curl -s -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MESSAGE\"}" $SLACK_WEBHOOK_URL)
+            body=$(echo $response | sed -e 's/[0-9]*$//')
+            status=$(echo $response | grep -o '[0-9]*$')
+            echo "Response body: $body"
+            echo "Response status: $status"
+            if [ "$status" -ne 200 ]; then
+              echo "Error sending message to Slack: $body"
+              exit 1
+            fi
           fi
       
-    
-    
+      
