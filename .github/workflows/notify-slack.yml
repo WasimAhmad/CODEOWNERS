@@ -25,7 +25,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          REQUESTED_REVIEWERS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers | jq -r '.users[].login | join(", ")')
+          REQUESTED_REVIEWERS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers | jq -c -r '.users[].login' | jq -s -r 'join(", ")')
           echo "Requested reviewers: $REQUESTED_REVIEWERS"
           MESSAGE="New Pull Request: *${PR_TITLE}* opened by ${PR_USER}\n${PR_URL}\n\nRequested reviewers: $REQUESTED_REVIEWERS"
           echo "Message: $MESSAGE"
